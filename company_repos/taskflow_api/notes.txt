@@ -1,1 +1,3 @@
 This project now supports text file indexing.
+TaskFlow sends task assignment notifications when a task is created.
+Project summaries include open task counts for digest messages.

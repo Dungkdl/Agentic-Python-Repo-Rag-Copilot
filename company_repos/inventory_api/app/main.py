@@ -1,6 +1,7 @@
 """Application entrypoint for the Inventory API sample repo."""
 
 from app.api.inventory import create_item, get_stock_status
+from app.api.suppliers import register_supplier
 
 
 def create_app() -> dict:
@@ -10,6 +11,7 @@ def create_app() -> dict:
         "routes": [
             "create_item",
             "get_stock_status",
+            "register_supplier",
         ],
     }
 

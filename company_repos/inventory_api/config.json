@@ -2,5 +2,7 @@
   "service": "inventory_api",
   "feature": "inventory indexing",
   "description": "This JSON file is used to test config indexing for the Inventory API.",
-  "default_reorder_threshold": 10
+  "default_reorder_threshold": 10,
+  "default_supplier_priority": 1,
+  "low_stock_report_key": "low_stock_count"
 }

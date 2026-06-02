@@ -1,6 +1,7 @@
 """API layer for inventory operations."""
 
 from app.services.inventory_service import InventoryService
+from app.services.report_service import InventoryReportService
 
 
 def create_item(sku: str, name: str, quantity: int) -> dict:
@@ -19,3 +20,9 @@ def get_stock_status(sku: str) -> dict:
     """Return stock status and restock recommendation for an item."""
     service = InventoryService()
     return service.get_stock_status(sku=sku)
+
+
+def build_low_stock_report(items: list[dict]) -> dict:
+    """Return a low-stock report for item dictionaries."""
+    report_service = InventoryReportService()
+    return report_service.build_low_stock_report(items=items)

@@ -839,10 +839,18 @@ The evaluation suite measures how accurately the agent answers codebase question
 
 ### Running evaluation
 
-From `backend/`:
+From the repository root:
 
 ```powershell
+cd backend
+docker compose build api
 docker compose run --rm api python -m scripts.run_eval
+```
+
+Evaluation output is printed to the terminal and saved to:
+
+```text
+backend/logs/evaluation/run_eval_YYYYMMDD_HHMMSS.log
 ```
 
 ### Eval cases format
@@ -887,9 +895,11 @@ Eval cases are defined in `backend/data/eval_cases.json`. Each case is a JSON ob
 
 1. Add a new JSON object to `backend/data/eval_cases.json`
 2. Set `repo_path` to the company repo path (e.g., `company_repos/taskflow_api`)
-3. Run the evaluation:
+3. Rebuild the API image and run the evaluation:
 
 ```powershell
+cd backend
+docker compose build api
 docker compose run --rm api python -m scripts.run_eval
 ```
 

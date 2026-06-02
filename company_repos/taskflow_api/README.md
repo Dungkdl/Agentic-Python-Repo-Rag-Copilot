@@ -16,6 +16,9 @@ The project helps teams create, update, assign, and track tasks.
 
 - `app/api/tasks.py` handles task-related API functions.
 - `app/services/task_service.py` contains task business logic.
+- `app/api/projects.py` exposes project operations.
+- `app/services/project_service.py` builds project summaries and digest notifications.
+- `app/models/task.py` defines the Task model and status helpers.
 
 ## Setup
 
@@ -29,3 +32,9 @@ New developers should start by reading:
 2. `app/main.py`
 3. `app/api/tasks.py`
 4. `app/services/task_service.py`
+
+## Operational Rules
+
+- Task statuses must be one of `open`, `in_progress`, `blocked`, or `done`.
+- Assignment notifications use the `task_assignment` channel.
+- Project digests use the `project_digest` channel and include `open_task_count`.

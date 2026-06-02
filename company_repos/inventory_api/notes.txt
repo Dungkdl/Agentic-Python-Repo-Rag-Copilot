@@ -1,2 +1,4 @@
 Inventory API supports product creation, stock updates, and restock checks.
 This file is used to test plain text indexing for the second company repository.
+Supplier registration stores suppliers by supplier_id.
+Low stock reports filter item dictionaries with needs_restock set to true.

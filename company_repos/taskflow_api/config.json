@@ -1,1 +1,7 @@
-{"feature":"json indexing","description":"This file is used to test JSON indexing."}
+{
+  "feature": "json indexing",
+  "description": "This file is used to test JSON indexing.",
+  "default_task_status": "open",
+  "assignment_channel": "task_assignment",
+  "project_digest_channel": "project_digest"
+}

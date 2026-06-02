@@ -1,6 +1,7 @@
 """Evaluation runner for repository QA behavior."""
 
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 import sys
 
@@ -20,12 +21,46 @@ from src.evaluation.metrics import (
     validate_citations,
 )
 from src.indexing.codebase_indexer import build_codebase_agent
-from src.core.settings import RETRIEVAL_MODE_FAST
+from src.core.settings import RETRIEVAL_MODE_ACCURATE, RETRIEVAL_MODE_FAST
 from src.core.config import EVAL_CASES_PATH, COMPANY_REPOS_DIR
 
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+
+class TeeWriter:
+    """Write console output to multiple streams."""
+
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, text):
+        for stream in self.streams:
+            stream.write(text)
+            stream.flush()
+
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
+
+
+def setup_eval_log() -> tuple[Path, object, object, object]:
+    """Mirror stdout/stderr to a timestamped evaluation log file."""
+    backend_root = Path(__file__).resolve().parents[1]
+    log_dir = backend_root / "logs" / "evaluation"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = log_dir / f"run_eval_{timestamp}.log"
+    log_file = log_path.open("w", encoding="utf-8", errors="replace")
+
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    sys.stdout = TeeWriter(original_stdout, log_file)
+    sys.stderr = TeeWriter(original_stderr, log_file)
+
+    return log_path, log_file, original_stdout, original_stderr
 
 
 def resolve_repo_path(repo_path: str) -> Path:
@@ -45,8 +80,8 @@ def resolve_repo_path(repo_path: str) -> Path:
     return path
 
 
-def build_indexed_repos(cases):
-    """Index each repository referenced by eval cases once."""
+def build_indexed_repos(cases, retrieval_mode: str):
+    """Index each repository referenced by eval cases once for one retrieval mode."""
     cases_by_repo = defaultdict(list)
 
     for case in cases:
@@ -66,7 +101,7 @@ def build_indexed_repos(cases):
             collection_name=f"eval_{repo_id}",
             reset_collection=True,
             use_llm=False,
-            retrieval_mode=RETRIEVAL_MODE_FAST,
+            retrieval_mode=retrieval_mode,
             use_llm_router=True,
             save_metadata=False,
         )
@@ -98,7 +133,16 @@ def print_result(result, extended_metrics):
     """Print one evaluation result in a human-readable format."""
     status = (
         "PASS"
-        if result.query_type_correct and result.expected_sources_all_found
+        if (
+            result.query_type_correct
+            and result.expected_sources_all_found
+            and result.file_hit_rate == 1.0
+            and result.answer_non_empty
+            and result.answer_keyword_recall == 1.0
+            and not result.forbidden_keyword_hit
+            and result.abstention_correct is not False
+            and not extended_metrics["max_latency_exceeded"]
+        )
         else "FAIL"
     )
 
@@ -127,8 +171,13 @@ def print_result(result, extended_metrics):
 
     print("\nExtended metrics:")
     print(f"Source precision:  {extended_metrics['source_precision']:.2f}")
+    print(f"File hit rate:     {result.file_hit_rate:.2f}")
+    print(f"Keyword recall:    {result.answer_keyword_recall:.2f}")
+    print(f"Forbidden hit:     {result.forbidden_keyword_hit}")
+    print(f"Abstention correct:{result.abstention_correct}")
     print(f"Citation validity: {extended_metrics['citation_validity_rate']:.2f}")
     print(f"Latency seconds:   {extended_metrics['latency_seconds']:.2f}")
+    print(f"Max latency hit:   {extended_metrics['max_latency_exceeded']}")
     print(f"Answer non-empty:  {extended_metrics['answer_non_empty']}")
     print(f"Router fallback:   {extended_metrics['router_fallback']}")
     print(f"LLM failure:       {extended_metrics['llm_failure']}")
@@ -175,6 +224,11 @@ def print_summary(title, results, extended_results):
         for item in extended_results
     ]
 
+    max_latency_exceeded_values = [
+        1.0 if item["max_latency_exceeded"] else 0.0
+        for item in extended_results
+    ]
+
     print("\n" + "=" * 100)
     print(title)
     print("=" * 100)
@@ -182,25 +236,33 @@ def print_summary(title, results, extended_results):
     print(f"Query type accuracy:             {summary['query_type_accuracy']:.2%}")
     print(f"Average source recall:           {summary['avg_source_recall']:.2%}")
     print(f"Expected sources all found rate: {summary['expected_sources_all_found_rate']:.2%}")
+    print(f"Average source precision:        {summary['avg_source_precision']:.2%}")
+    print(f"Average file hit rate:           {summary['avg_file_hit_rate']:.2%}")
+    print(f"Answer non-empty rate:           {summary['answer_non_empty_rate']:.2%}")
+    print(f"Average keyword recall:          {summary['avg_answer_keyword_recall']:.2%}")
+    print(f"Forbidden keyword hit rate:      {summary['forbidden_keyword_hit_rate']:.2%}")
+    print(f"Abstention accuracy:             {summary['abstention_accuracy']:.2%}")
 
     print("\nExtended Evaluation Summary")
     print("-" * 100)
     print(f"Average source precision:        {safe_average(source_precisions):.2%}")
     print(f"Average citation validity:       {safe_average(citation_validities):.2%}")
     print(f"Average latency seconds:         {safe_average(latencies):.2f}")
+    print(f"Max latency exceeded rate:       {safe_average(max_latency_exceeded_values):.2%}")
     print(f"Answer non-empty rate:           {safe_average(answer_non_empty_values):.2%}")
     print(f"Router fallback rate:            {safe_average(router_fallback_values):.2%}")
     print(f"LLM failure rate:                {safe_average(llm_failure_values):.2%}")
 
 
-def main() -> None:
-    """Run the repository QA evaluation suite."""
+def run_single_mode_eval(retrieval_mode: str) -> None:
+    """Run the repository QA evaluation suite for one retrieval mode."""
     eval_path = EVAL_CASES_PATH
 
     cases = load_eval_cases(eval_path)
     print(f"Loaded {len(cases)} eval cases")
+    print(f"Retrieval mode: {retrieval_mode}")
 
-    indexed_repos = build_indexed_repos(cases)
+    indexed_repos = build_indexed_repos(cases, retrieval_mode=retrieval_mode)
     results = []
     extended_results = []
 
@@ -211,8 +273,6 @@ def main() -> None:
         response = indexed.agent.answer(case.question)
         end_time = now_seconds()
 
-        result = evaluate_response(case, response)
-
         actual_sources = get_actual_response_sources(response)
         expected_sources = get_expected_case_sources(case)
 
@@ -222,11 +282,25 @@ def main() -> None:
         )
 
         raw_results = getattr(response, "raw_results", {}) or {}
+        latency_seconds = compute_latency_seconds(start_time, end_time)
+        max_latency_exceeded = (
+            case.max_latency_seconds is not None
+            and latency_seconds > case.max_latency_seconds
+        )
+
+        result = evaluate_response(
+            case=case,
+            response=response,
+            latency_seconds=latency_seconds,
+            raw_results=raw_results,
+            citation_validity_rate=citation_metrics["citation_validity_rate"],
+        )
 
         extended_metrics = {
             "id": result.id,
             "repo_id": result.repo_id,
-            "latency_seconds": compute_latency_seconds(start_time, end_time),
+            "latency_seconds": latency_seconds,
+            "max_latency_exceeded": max_latency_exceeded,
             "source_precision": compute_source_precision(
                 actual_sources=actual_sources,
                 expected_sources=expected_sources,
@@ -243,7 +317,11 @@ def main() -> None:
 
         print_result(result, extended_metrics)
 
-    print_summary("Overall Evaluation Summary", results, extended_results)
+    print_summary(
+        f"Overall Evaluation Summary - {retrieval_mode}",
+        results,
+        extended_results,
+    )
 
     repo_ids = sorted({result.repo_id for result in results})
 
@@ -261,10 +339,30 @@ def main() -> None:
         ]
 
         print_summary(
-            f"Evaluation Summary - {repo_id}",
+            f"Evaluation Summary - {repo_id} - {retrieval_mode}",
             repo_results,
             repo_extended_results,
         )
+
+
+def main() -> None:
+    """Run the repository QA evaluation suite for fast and accurate modes."""
+    log_path, log_file, original_stdout, original_stderr = setup_eval_log()
+
+    try:
+        print(f"Evaluation log: {log_path}")
+
+        for retrieval_mode in (RETRIEVAL_MODE_FAST, RETRIEVAL_MODE_ACCURATE):
+            print("\n" + "#" * 100)
+            print(f"Starting benchmark for retrieval mode: {retrieval_mode}")
+            print("#" * 100)
+            run_single_mode_eval(retrieval_mode)
+
+        print(f"\nEvaluation log saved to: {log_path}")
+    finally:
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        log_file.close()
 
 
 if __name__ == "__main__":
