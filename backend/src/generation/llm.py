@@ -9,7 +9,7 @@ import os
 from typing import Optional
 
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 
 
 class DeepSeekLLM:
@@ -29,15 +29,15 @@ class DeepSeekLLM:
         self.base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
         self.api_key = api_key
 
-        # Configure OpenAI SDK to use DeepSeek's OpenAI-compatible endpoint
-        openai.api_key = self.api_key
-        if self.base_url:
-            openai.api_base = self.base_url.rstrip("/") + "/v1"
-        self.client = openai
+        # DeepSeek exposes an OpenAI-compatible API at /v1.
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=f"{self.base_url}/v1",
+        )
 
     def generate(self, system_prompt: str, user_prompt: str) -> str:
         """Generate a plain-text answer from a system prompt and user prompt."""
-        resp = self.client.ChatCompletion.create(
+        resp = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -46,31 +46,10 @@ class DeepSeekLLM:
             temperature=0.0,
         )
 
-        # Normalize extraction across SDK response shapes
-        choices = None
-        if isinstance(resp, dict):
-            choices = resp.get("choices")
-        else:
-            try:
-                choices = resp.choices
-            except Exception:
-                choices = None
-
-        if not choices:
+        if not resp.choices:
             raise ValueError("DeepSeek/OpenAI response did not include any choices.")
 
-        first = choices[0]
-        content = None
-        if isinstance(first, dict):
-            content = (first.get("message") or {}).get("content") or first.get("text")
-        else:
-            try:
-                content = first.message.content
-            except Exception:
-                try:
-                    content = first.text
-                except Exception:
-                    content = None
+        content = resp.choices[0].message.content
 
         if not content:
             raise ValueError("DeepSeek/OpenAI response did not include message content.")
