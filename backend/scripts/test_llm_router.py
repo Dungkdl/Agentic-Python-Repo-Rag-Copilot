@@ -1,9 +1,9 @@
 from src.agent_core.query_router import LLMQueryRouter
-from src.generation.llm import GeminiLLM
+from src.generation.llm import DeepSeekLLM
 
 
 def main():
-    router = LLMQueryRouter(llm=GeminiLLM())
+    router = LLMQueryRouter(llm=DeepSeekLLM())
 
     questions = [
         "Dự án này dùng để làm gì?",

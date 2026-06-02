@@ -14,7 +14,7 @@ Agentic Python Repo RAG Copilot is an AI-powered assistant for understanding Pyt
 | Database | Supabase / PostgreSQL + pgvector |
 | Embeddings | sentence-transformers (`all-MiniLM-L6-v2`, 384-dim) |
 | Reranking | Cross-Encoder (`ms-marco-MiniLM-L-6-v2`) |
-| LLM | Google Gemini (`gemini-2.5-flash`) |
+| LLM | DeepSeek (`deepseek-chat`) |
 | Code Graph | Custom AST-based (Python `ast` module) |
 | BM25 | rank-bm25 |
 | Infrastructure | Docker, Docker Compose |
@@ -157,7 +157,7 @@ User Question
    Reranks RRF results using cross-encoder/ms-marco-MiniLM-L-6-v2
   ↓
 5. LLM Answer Generation
-   Generates a grounded answer using Gemini with retrieved context.
+  Generates a grounded answer using DeepSeek with retrieved context.
    Falls back to raw results if LLM is unavailable or rate-limited.
   ↓
 6. Response
@@ -347,7 +347,7 @@ agentic-python-repo-rag-copilot/
 │   │   ├── evaluation/
 │   │   │   ├── eval_runner.py       Evaluation case loader + evaluate_response
 │   │   │   └── metrics.py           Extended metrics (latency, precision, citation, etc.)
-│   │   ├── generation/              LLM answer generation (Gemini)
+│   │   ├── generation/              LLM answer generation (DeepSeek)
 │   │   ├── graph/
 │   │   │   └── code_graph.py        AST-based code graph builder
 │   │   ├── indexing/
@@ -402,9 +402,10 @@ All variables are set in `backend/.env`. See `backend/.env.example` for a templa
 
 | Variable | Required | Description |
 |---|---|---|
-| `GEMINI_API_KEY` | Yes | Google Gemini API key |
-| `GEMINI_MODEL` | No | Gemini model name (default: `gemini-2.5-flash`) |
-| `LLM_BACKEND` | No | LLM backend to use (default: `gemini`) |
+| `DEEPSEEK_API_KEY` | Yes | DeepSeek API key |
+| `DEEPSEEK_MODEL` | No | DeepSeek model name (default: `deepseek-chat`) |
+| `DEEPSEEK_BASE_URL` | No | DeepSeek API base URL (default: `https://api.deepseek.com`) |
+| `LLM_BACKEND` | No | LLM backend to use (default: `deepseek`) |
 | `DATABASE_URL` | Yes | PostgreSQL connection string with `psycopg` driver |
 | `SUPABASE_URL` | Yes | Supabase project URL |
 | `SUPABASE_KEY` | Yes | Supabase publishable API key |
@@ -421,7 +422,7 @@ This is the recommended local setup. You do **not** need a local Python virtual 
 
 - Docker Desktop
 - Supabase/PostgreSQL database URL
-- Gemini API key
+- DeepSeek API key
 
 ## 1. Create backend environment file
 
@@ -435,9 +436,10 @@ Copy-Item .env.example .env
 Edit `backend/.env`:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
-LLM_BACKEND=gemini
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+LLM_BACKEND=deepseek
 
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your_supabase_publishable_key_here
@@ -920,8 +922,9 @@ Start Command: python -m uvicorn api.main:app --host 0.0.0.0 --port $PORT
 Set environment variables on Render:
 
 ```text
-GEMINI_API_KEY
-GEMINI_MODEL
+DEEPSEEK_API_KEY
+DEEPSEEK_MODEL
+DEEPSEEK_BASE_URL
 LLM_BACKEND
 DATABASE_URL
 EMBEDDING_DIMENSION
